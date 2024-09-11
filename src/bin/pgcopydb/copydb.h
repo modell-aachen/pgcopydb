@@ -244,7 +244,7 @@ typedef struct CopyDataSpec
 	SplitTableLargerThan splitTablesLargerThan;
 
 	Queue copyQueue;
-	Queue indexQueue;if (!copydb_copy_all_sequences(&copySpecs))
+	Queue indexQueue;
 	DumpPaths dumpPaths;
 
 	/* results from calling has_database_privilege() on the source */
