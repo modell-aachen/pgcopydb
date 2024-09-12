@@ -3801,6 +3801,7 @@ catalog_iter_s_index_table(DatabaseCatalog *catalog,
 	{
 		/* errors have already been logged */
 		free(iter);
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -4745,6 +4746,7 @@ catalog_lookup_filter_by_oid(DatabaseCatalog *catalog,
 	if (!catalog_sql_prepare(db, sql, &query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -4756,6 +4758,7 @@ catalog_lookup_filter_by_oid(DatabaseCatalog *catalog,
 	if (!catalog_sql_bind(&query, params, 1))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -4763,8 +4766,11 @@ catalog_lookup_filter_by_oid(DatabaseCatalog *catalog,
 	if (!catalog_sql_execute_once(&query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
+
+	(void) semaphore_unlock(&(catalog->sema));
 
 	return true;
 }
@@ -4796,9 +4802,16 @@ catalog_lookup_filter_by_rlname(DatabaseCatalog *catalog,
 		.fetchFunction = &catalog_filter_fetch
 	};
 
+	if (!semaphore_lock(&(catalog->sema)))
+	{
+		/* errors have already been logged */
+		return false;
+	}
+
 	if (!catalog_sql_prepare(db, sql, &query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -4811,6 +4824,7 @@ catalog_lookup_filter_by_rlname(DatabaseCatalog *catalog,
 	if (!catalog_sql_bind(&query, params, 1))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -4818,8 +4832,11 @@ catalog_lookup_filter_by_rlname(DatabaseCatalog *catalog,
 	if (!catalog_sql_execute_once(&query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
+
+	(void) semaphore_unlock(&(catalog->sema));
 
 	return true;
 }
@@ -5056,9 +5073,16 @@ catalog_iter_s_database_init(SourceDatabaseIterator *iter)
 	query->context = iter->dat;
 	query->fetchFunction = &catalog_s_database_fetch;
 
+	if (!semaphore_lock(&(catalog->sema)))
+	{
+		/* errors have already been logged */
+		return false;
+	}
+
 	if (!catalog_sql_prepare(db, sql, query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -5717,9 +5741,16 @@ catalog_lookup_s_namespace_by_rlname(DatabaseCatalog *catalog,
 		.fetchFunction = &catalog_s_namespace_fetch
 	};
 
+		if (!semaphore_lock(&(catalog->sema)))
+	{
+		/* errors have already been logged */
+		return false;
+	}
+
 	if (!catalog_sql_prepare(db, sql, &query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -5732,6 +5763,7 @@ catalog_lookup_s_namespace_by_rlname(DatabaseCatalog *catalog,
 	if (!catalog_sql_bind(&query, params, 1))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -5739,8 +5771,11 @@ catalog_lookup_s_namespace_by_rlname(DatabaseCatalog *catalog,
 	if (!catalog_sql_execute_once(&query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
+
+	(void) semaphore_unlock(&(catalog->sema));
 
 	return true;
 }

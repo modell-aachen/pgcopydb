@@ -2262,10 +2262,17 @@ summary_iter_timing(DatabaseCatalog *catalog,
 
 	iter->catalog = catalog;
 
+	if (!semaphore_lock(&(catalog->sema)))
+	{
+		/* errors have already been logged */
+		return false;
+	}
+
 	if (!summary_iter_timing_init(iter))
 	{
 		/* errors have already been logged */
 		free(iter);
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
 
@@ -2275,6 +2282,7 @@ summary_iter_timing(DatabaseCatalog *catalog,
 		{
 			/* errors have already been logged */
 			free(iter);
+			(void) semaphore_unlock(&(catalog->sema));
 			return false;
 		}
 
@@ -2286,6 +2294,7 @@ summary_iter_timing(DatabaseCatalog *catalog,
 			{
 				/* errors have already been logged */
 				free(iter);
+				(void) semaphore_unlock(&(catalog->sema));
 				return false;
 			}
 
@@ -2297,11 +2306,14 @@ summary_iter_timing(DatabaseCatalog *catalog,
 		{
 			log_error("Failed to iterate over list of timings, "
 					  "see above for details");
+			(void) semaphore_unlock(&(catalog->sema));
 			return false;
 		}
 	}
 
 	free(iter);
+
+	(void) semaphore_unlock(&(catalog->sema));
 
 	return true;
 }
