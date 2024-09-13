@@ -746,7 +746,7 @@ catalog_init(DatabaseCatalog *catalog)
 		if (catalog->type == DATABASE_CATALOG_TYPE_SOURCE)
 		{
 			/* bypass the WAL mode, unclear if we benefit from it */
-			if (false)
+			if (true)
 			{
 				if (!catalog_set_wal_mode(catalog))
 				{
