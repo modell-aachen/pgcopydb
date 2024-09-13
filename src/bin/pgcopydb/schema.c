@@ -2172,7 +2172,7 @@ struct FilteringQueries listSourceSequencesSQL[] = {
 		"            and r2.relname = ftd2.relname "
 
 		/* WHERE clause for exclusion filters */
-		"     where s.nspname is not null and fn3.nspname is null
+		"     where s.nspname is not null and fn3.nspname is null "
 
 		"   order by nspname, relname"
 	},
