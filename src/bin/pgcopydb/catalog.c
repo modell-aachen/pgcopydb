@@ -5086,6 +5086,8 @@ catalog_iter_s_database_init(DatabaseCatalog *catalog, SourceDatabaseIterator *i
 		return false;
 	}
 
+	(void) semaphore_unlock(&(catalog->sema));
+
 	return true;
 }
 
@@ -5741,7 +5743,7 @@ catalog_lookup_s_namespace_by_rlname(DatabaseCatalog *catalog,
 		.fetchFunction = &catalog_s_namespace_fetch
 	};
 
-		if (!semaphore_lock(&(catalog->sema)))
+	if (!semaphore_lock(&(catalog->sema)))
 	{
 		/* errors have already been logged */
 		return false;
