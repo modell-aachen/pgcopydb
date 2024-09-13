@@ -701,6 +701,7 @@ catalog_open(DatabaseCatalog *catalog)
 bool
 catalog_init(DatabaseCatalog *catalog)
 {
+	log_debug("Init catalog \"%s\"", catalog->dbfile);
 	if (catalog->db != NULL)
 	{
 		log_debug("Skipping opening SQLite database \"%s\": already opened",
