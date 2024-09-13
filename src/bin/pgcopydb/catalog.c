@@ -1360,6 +1360,13 @@ catalog_setup_replication(DatabaseCatalog *catalog,
 
 	int count = sizeof(params) / sizeof(params[0]);
 
+	if (!semaphore_lock(&(catalog->sema)))
+	{
+		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
+		return false;
+	}
+
 	if (!catalog_sql_bind(&query, params, count))
 	{
 		/* errors have already been logged */
@@ -1370,8 +1377,11 @@ catalog_setup_replication(DatabaseCatalog *catalog,
 	if (!catalog_sql_execute_once(&query))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(catalog->sema));
 		return false;
 	}
+
+	(void) semaphore_unlock(&(catalog->sema));
 
 	return true;
 }
@@ -4742,6 +4752,12 @@ catalog_lookup_filter_by_oid(DatabaseCatalog *catalog,
 		.context = result,
 		.fetchFunction = &catalog_filter_fetch
 	};
+
+	if (!semaphore_lock(&(catalog->sema)))
+	{
+		/* errors have already been logged */
+		return false;
+	}
 
 	if (!catalog_sql_prepare(db, sql, &query))
 	{
