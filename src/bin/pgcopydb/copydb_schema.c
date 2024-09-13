@@ -940,6 +940,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		if (!schema_list_extensions(pgsql, filtersDB))
 		{
 			/* errors have already been logged */
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -948,12 +949,14 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		if (!catalog_register_section(filtersDB, &timing))
 		{
 			/* errors have already been logged */
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
 		if (!catalog_count_objects(filtersDB, &count))
 		{
 			log_error("Failed to count objects in our catalogs");
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
