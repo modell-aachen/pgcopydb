@@ -1032,6 +1032,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 
 			if (!catalog_attach(filtersDB, sourceDB, "source"))
 			{
+				log_debug("copydb_schema: 3,5 error");
 				/* errors have already been logged */
 				(void) semaphore_unlock(&(filtersDB->sema));
 				return false;

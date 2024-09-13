@@ -683,6 +683,7 @@ catalog_register_setup_from_specs(CopyDataSpec *copySpecs)
 bool
 catalog_open(DatabaseCatalog *catalog)
 {
+	log_debug("Opening catalog \"%s\"", catalog->dbfile);
 	if (!file_exists(catalog->dbfile))
 	{
 		log_error("Failed to open catalog \"%s\", file does not exists",
@@ -823,6 +824,7 @@ catalog_attach(DatabaseCatalog *a, DatabaseCatalog *b, const char *name)
 bool
 catalog_close(DatabaseCatalog *catalog)
 {
+	log_debug("Closing catalog \"%s\"", catalog->dbfile);
 	/* it's okay to try and close the same catalog twice */
 	if (catalog->db == NULL)
 	{
