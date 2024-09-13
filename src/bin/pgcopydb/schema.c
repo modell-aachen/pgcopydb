@@ -402,11 +402,49 @@ schema_list_extensions(PGSQL *pgsql, DatabaseCatalog *catalog)
 	SourceExtensionArrayContext parseContext = { { 0 }, catalog, false };
 
 	char *sql =
+		"with recursive extconfig_paths as ( "
+		"     select extconfig "
+		"     from pg_extension "
+		"     where extconfig is not null "
+		" ), fk_constraints as ( "
+		"     select fk.oid, fk.conrelid, fk.confrelid "
+		"     from pg_constraint fk "
+		"     inner join extconfig_paths "
+		"         on fk.conrelid = any(extconfig_paths.extconfig) "
+		"         or fk.confrelid = any(extconfig_paths.extconfig) "
+		"     where fk.contype = 'f' and fk.conrelid <> fk.confrelid "
+		" ), raw_ordered_fk_constraints as ( "
+		"     select "
+		"            distinct c.confrelid as relid, "
+		"            0 as depth, "
+		"            false as is_cycle, "
+		"            ARRAY[c.oid] as path "
+		"       from fk_constraints c "
+		"      where not exists ( "
+		"            select 1 "
+		"              from fk_constraints fc "
+		"             where fc.conrelid = c.confrelid "
+		"            ) "
+		"     UNION "
+		"     select "
+		"            distinct c.conrelid as relid, "
+		"            r.depth + 1 as depth, "
+		"            c.oid = ANY(path) as is_cycle, "
+		"            path || c.oid as path "
+		"       from raw_ordered_fk_constraints r "
+		"       join fk_constraints c ON c.confrelid = r.relid"
+		"      where not is_cycle "
+		" ), ordered_fk_constraints AS ( "
+		"     select "
+		"            relid, "
+		"            max(depth) as depth "
+		"       from raw_ordered_fk_constraints group by relid "
+		" ), extension_config_data as ( "
 		"select e.oid, extname, extnamespace::regnamespace, extrelocatable, "
 		"       0 as count, null as n, "
 		"       null as extconfig, null as nspname, null as relname, "
 		"       null as extcondition, "
-		"		null as relkind "
+		"       null as relkind "
 		"  from pg_extension e "
 		" where extconfig is null "
 
@@ -425,8 +463,18 @@ schema_list_extensions(PGSQL *pgsql, DatabaseCatalog *catalog)
 		"          left join pg_class c on c.oid = extconfig.extconfig "
 		"          join pg_namespace n on c.relnamespace = n.oid "
 		"   where extconfig.extconfig is not null "
-
-		"order by oid, n";
+		") "
+		"select oid, extname, extnamespace, extrelocatable, "
+		"       count, "
+		"       row_number() over (partition by oid order by depth) as n, "
+		"       extconfig, "
+		"       nspname, "
+		"       relname, "
+		"       extcondition, "
+		"       relkind "
+		" from extension_config_data "
+		"      left outer join ordered_fk_constraints ofc on extconfig = ofc.relid "
+	;
 
 	if (!pgsql_execute_with_params(pgsql, sql,
 								   0, NULL, NULL,
@@ -457,7 +505,7 @@ schema_list_ext_schemas(PGSQL *pgsql, DatabaseCatalog *catalog)
 	SourceSchemaArrayContext parseContext = { { 0 }, catalog, false };
 
 	char *sql =
-		"select n.oid, n.nspname, "
+		"select distinct on (n.oid) n.oid, n.nspname, "
 		"       format('- %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
 		"                regexp_replace(auth.rolname, '[\\n\\r]', ' ')) "
@@ -636,7 +684,8 @@ struct FilteringQueries listSourceTableSizeSQL[] = {
 	{
 		SOURCE_FILTER_TYPE_NONE,
 
-		"  select c.oid, pg_table_size(c.oid) as bytes "
+		"  select c.oid, pg_table_size(c.oid) as bytes, "
+		"         pg_size_pretty(pg_table_size(c.oid)) "
 		"    from pg_catalog.pg_class c"
 		"         join pg_catalog.pg_namespace n on c.relnamespace = n.oid"
 
@@ -657,7 +706,8 @@ struct FilteringQueries listSourceTableSizeSQL[] = {
 	{
 		SOURCE_FILTER_TYPE_INCL,
 
-		"  select c.oid, pg_table_size(c.oid) as bytes "
+		"  select c.oid, pg_table_size(c.oid) as bytes, "
+		"         pg_size_pretty(pg_table_size(c.oid)) "
 		"    from pg_catalog.pg_class c"
 		"         join pg_catalog.pg_namespace n on c.relnamespace = n.oid"
 
@@ -683,7 +733,8 @@ struct FilteringQueries listSourceTableSizeSQL[] = {
 	{
 		SOURCE_FILTER_TYPE_EXCL,
 
-		"  select c.oid, pg_table_size(c.oid) as bytes "
+		"  select c.oid, pg_table_size(c.oid) as bytes, "
+		"         pg_size_pretty(pg_table_size(c.oid)) "
 		"    from pg_catalog.pg_class c"
 		"         join pg_catalog.pg_namespace n on c.relnamespace = n.oid"
 
@@ -723,7 +774,8 @@ struct FilteringQueries listSourceTableSizeSQL[] = {
 	{
 		SOURCE_FILTER_TYPE_LIST_NOT_INCL,
 
-		"  select c.oid, pg_table_size(c.oid) as bytes "
+		"  select c.oid, pg_table_size(c.oid) as bytes, "
+		"         pg_size_pretty(pg_table_size(c.oid)) "
 		"    from pg_catalog.pg_class c"
 		"         join pg_catalog.pg_namespace n on c.relnamespace = n.oid"
 
@@ -752,7 +804,8 @@ struct FilteringQueries listSourceTableSizeSQL[] = {
 	{
 		SOURCE_FILTER_TYPE_LIST_EXCL,
 
-		"  select c.oid, pg_table_size(c.oid) as bytes "
+		"  select c.oid, pg_table_size(c.oid) as bytes, "
+		"         pg_size_pretty(pg_table_size(c.oid)) "
 		"    from pg_catalog.pg_class c"
 		"         join pg_catalog.pg_namespace n on c.relnamespace = n.oid"
 
@@ -783,9 +836,8 @@ struct FilteringQueries listSourceTableSizeSQL[] = {
 
 
 /*
- * schema_prepare_pgcopydb_table_size creates a table named pgcopydb_table_size
- * on the given connection (typically, the source database). The creation is
- * skipped if the table already exists.
+ * schema_prepare_pgcopydb_table_size creates an internal catalog table named
+ * s_table_size.
  */
 bool
 schema_prepare_pgcopydb_table_size(PGSQL *pgsql,
@@ -971,10 +1023,11 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1012,7 +1065,6 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"               select json_agg(row_to_json(atts)) as js "
 		"                from atts "
 		"              ) as attrs on true"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* find a copy partition key candidate */
 		"         left join lateral ("
@@ -1033,7 +1085,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"              limit 1"
 		"         ) as pkeys on true"
 
-		"   where relkind = 'r' and c.relpersistence in ('p', 'u') "
+		"   where relkind in ('r', 'm') and c.relpersistence in ('p', 'u') "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and n.nspname !~ 'pgcopydb' "
 
@@ -1047,7 +1099,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"            and d.deptype = 'e' "
 		"       ) "
 
-		"order by bytes desc, n.nspname, c.relname"
+		"order by n.nspname, c.relname"
 	},
 
 	{
@@ -1056,10 +1108,11 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         exists(select 1 "
 		"                  from pg_temp.filter_exclude_table_data ftd "
 		"                 where n.nspname = ftd.nspname "
@@ -1100,7 +1153,6 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"               select json_agg(row_to_json(atts)) as js "
 		"                from atts "
 		"              ) as attrs on true"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* include-only-table */
 		"         join pg_temp.filter_include_only_table inc "
@@ -1126,7 +1178,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"              limit 1"
 		"         ) as pkeys on true"
 
-		"   where relkind = 'r' and c.relpersistence in ('p', 'u') "
+		"   where relkind in ('r', 'm') and c.relpersistence in ('p', 'u') "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and n.nspname !~ 'pgcopydb' "
 
@@ -1140,7 +1192,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"            and d.deptype = 'e' "
 		"       ) "
 
-		"order by bytes desc, n.nspname, c.relname"
+		"order by n.nspname, c.relname"
 	},
 
 	{
@@ -1149,10 +1201,11 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         ftd.relname is not null as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1190,7 +1243,6 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"               select json_agg(row_to_json(atts)) as js "
 		"                from atts "
 		"              ) as attrs on true"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* exclude-schema */
 		"         left join pg_temp.filter_exclude_schema fn "
@@ -1225,14 +1277,13 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"              limit 1"
 		"         ) as pkeys on true"
 
-		"   where relkind in ('r', 'p') and c.relpersistence in ('p', 'u') "
+		"   where relkind in ('r', 'p', 'm') and c.relpersistence in ('p', 'u') "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and n.nspname !~ 'pgcopydb' "
 
 		/* WHERE clause for exclusion filters */
 		"     and fn.nspname is null "
 		"     and ft.relname is null "
-		"     and ftd.relname is null "
 
 		/* avoid pg_class entries which belong to extensions */
 		"     and not exists "
@@ -1244,7 +1295,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"            and d.deptype = 'e' "
 		"       ) "
 
-		"order by bytes desc, n.nspname, c.relname"
+		"order by n.nspname, c.relname"
 	},
 
 	{
@@ -1253,10 +1304,11 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1294,7 +1346,6 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"               select json_agg(row_to_json(atts)) as js "
 		"                from atts "
 		"              ) as attrs on true"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* include-only-table */
 		"    left join pg_temp.filter_include_only_table inc "
@@ -1320,7 +1371,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"              limit 1"
 		"         ) as pkeys on true"
 
-		"   where relkind in ('r', 'p') and c.relpersistence in ('p', 'u') "
+		"   where relkind in ('r', 'p', 'm') and c.relpersistence in ('p', 'u') "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and n.nspname !~ 'pgcopydb' "
 
@@ -1337,7 +1388,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"            and d.deptype = 'e' "
 		"       ) "
 
-		"order by bytes desc, n.nspname, c.relname"
+		"order by n.nspname, c.relname"
 	},
 
 	{
@@ -1346,10 +1397,11 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1387,7 +1439,6 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"               select json_agg(row_to_json(atts)) as js "
 		"                from atts "
 		"              ) as attrs on true"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* exclude-schema */
 		"         left join pg_temp.filter_exclude_schema fn "
@@ -1417,7 +1468,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"              limit 1"
 		"         ) as pkeys on true"
 
-		"   where relkind in ('r', 'p') and c.relpersistence in ('p', 'u') "
+		"   where relkind in ('r', 'p', 'm') and c.relpersistence in ('p', 'u') "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and n.nspname !~ 'pgcopydb' "
 
@@ -1435,7 +1486,7 @@ struct FilteringQueries listSourceTablesSQL[] = {
 		"            and d.deptype = 'e' "
 		"       ) "
 
-		"order by bytes desc, n.nspname, c.relname"
+		"order by n.nspname, c.relname"
 	}
 };
 
@@ -1608,10 +1659,11 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1624,9 +1676,8 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"         join pg_namespace n ON n.oid = c.relnamespace "
 		"         left join pg_catalog.pg_am on c.relam = pg_am.oid"
 		"         join pg_roles auth ON auth.oid = c.relowner"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
-		"   where c.relkind = 'r' and c.relpersistence in ('p', 'u')  "
+		"   where c.relkind in ('r', 'm') and c.relpersistence in ('p', 'u')  "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and not exists "
 		"         ( "
@@ -1655,10 +1706,11 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1671,14 +1723,13 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"         join pg_namespace n ON n.oid = c.relnamespace "
 		"         left join pg_catalog.pg_am on c.relam = pg_am.oid"
 		"         join pg_roles auth ON auth.oid = c.relowner"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* include-only-table */
 		"         join pg_temp.filter_include_only_table inc "
 		"           on n.nspname = inc.nspname "
 		"          and c.relname = inc.relname "
 
-		"   where c.relkind = 'r' and c.relpersistence in ('p', 'u') "
+		"   where c.relkind in ('r', 'm') and c.relpersistence in ('p', 'u') "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and not exists "
 		"         ( "
@@ -1707,10 +1758,11 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         ftd.relname is not null as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1723,7 +1775,6 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"         join pg_namespace n ON n.oid = c.relnamespace "
 		"         left join pg_catalog.pg_am on c.relam = pg_am.oid"
 		"         join pg_roles auth ON auth.oid = c.relowner"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* exclude-schema */
 		"         left join pg_temp.filter_exclude_schema fn "
@@ -1739,7 +1790,7 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"                on n.nspname = ftd.nspname "
 		"               and c.relname = ftd.relname "
 
-		"   where c.relkind = 'r' and c.relpersistence in ('p', 'u')  "
+		"   where c.relkind in ('r', 'm') and c.relpersistence in ('p', 'u')  "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and not exists "
 		"         ( "
@@ -1752,7 +1803,6 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		/* WHERE clause for exclusion filters */
 		"     and fn.nspname is null "
 		"     and ft.relname is null "
-		"     and ftd.relname is null "
 
 		/* avoid pg_class entries which belong to extensions */
 		"     and not exists "
@@ -1773,10 +1823,11 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1789,14 +1840,13 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"         join pg_namespace n ON n.oid = c.relnamespace "
 		"         left join pg_catalog.pg_am on c.relam = pg_am.oid"
 		"         join pg_roles auth ON auth.oid = c.relowner"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* include-only-table */
 		"    left join pg_temp.filter_include_only_table inc "
 		"           on n.nspname = inc.nspname "
 		"          and c.relname = inc.relname "
 
-		"   where c.relkind = 'r' and c.relpersistence in ('p', 'u')  "
+		"   where c.relkind in ('r', 'm') and c.relpersistence in ('p', 'u')  "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and not exists "
 		"         ( "
@@ -1828,10 +1878,11 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"  select c.oid, "
 		"         format('%I', n.nspname) as nspname, "
 		"         format('%I', c.relname) as relname, "
+		"         c.relkind as relkind, "
 		"         pg_am.amname, "
 		"         c.relpages, c.reltuples::bigint, "
-		"         ts.bytes as bytes, "
-		"         pg_size_pretty(ts.bytes), "
+		"         c.relpages * current_setting('block_size')::bigint as bytesestimate, "
+		"         pg_size_pretty(c.relpages * current_setting('block_size')::bigint), "
 		"         false as excludedata, "
 		"         format('%s %s %s', "
 		"                regexp_replace(n.nspname, '[\\n\\r]', ' '), "
@@ -1844,7 +1895,6 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"         join pg_namespace n ON n.oid = c.relnamespace "
 		"         left join pg_catalog.pg_am on c.relam = pg_am.oid"
 		"         join pg_roles auth ON auth.oid = c.relowner"
-		"         left join pgcopydb_table_size ts on ts.oid = c.oid"
 
 		/* exclude-schema */
 		"         left join pg_temp.filter_exclude_schema fn "
@@ -1855,7 +1905,7 @@ struct FilteringQueries listSourceTablesNoPKSQL[] = {
 		"                on n.nspname = ft.nspname "
 		"               and c.relname = ft.relname "
 
-		"   where c.relkind = 'r' and c.relpersistence in ('p', 'u')  "
+		"   where c.relkind in ('r', 'm') and c.relpersistence in ('p', 'u')  "
 		"     and n.nspname !~ '^pg_' and n.nspname <> 'information_schema' "
 		"     and not exists "
 		"         ( "
@@ -2053,8 +2103,8 @@ struct FilteringQueries listSourceSequencesSQL[] = {
 		"       left join pg_depend d2 on d2.refobjid = s.seqoid "
 		"        and d2.refclassid = 'pg_class'::regclass "
 		"        and d2.classid = 'pg_attrdef'::regclass "
-		"       join pg_attrdef a on a.oid = d2.objid "
-		"       join pg_attribute at "
+		"       left join pg_attrdef a on a.oid = d2.objid "
+		"       left join pg_attribute at "
 		"         on at.attrelid = a.adrelid "
 		"        and at.attnum = a.adnum "
 
@@ -2132,16 +2182,16 @@ struct FilteringQueries listSourceSequencesSQL[] = {
 		"       left join pg_depend d2 on d2.refobjid = s.seqoid "
 		"        and d2.refclassid = 'pg_class'::regclass "
 		"        and d2.classid = 'pg_attrdef'::regclass "
-		"       join pg_attrdef a on a.oid = d2.objid "
-		"       join pg_attribute at "
+		"       left join pg_attrdef a on a.oid = d2.objid "
+		"       left join pg_attribute at "
 		"         on at.attrelid = a.adrelid "
 		"        and at.attnum = a.adnum "
 
 		"       left join pg_class r1 on r1.oid = d1.refobjid "
-		"       join pg_namespace rn1 on rn1.oid = r1.relnamespace "
+		"       left join pg_namespace rn1 on rn1.oid = r1.relnamespace "
 
 		"       left join pg_class r2 on r2.oid = at.attrelid  "
-		"       join pg_namespace rn2 on rn2.oid = r2.relnamespace "
+		"       left join pg_namespace rn2 on rn2.oid = r2.relnamespace "
 
 		/* exclude-schema */
 		"      left join pg_temp.filter_exclude_schema fn1 "
@@ -2246,8 +2296,8 @@ struct FilteringQueries listSourceSequencesSQL[] = {
 		"       left join pg_depend d2 on d2.refobjid = s.seqoid "
 		"        and d2.refclassid = 'pg_class'::regclass "
 		"        and d2.classid = 'pg_attrdef'::regclass "
-		"       join pg_attrdef a on a.oid = d2.objid "
-		"       join pg_attribute at "
+		"       left join pg_attrdef a on a.oid = d2.objid "
+		"       left join pg_attribute at "
 		"         on at.attrelid = a.adrelid "
 		"        and at.attnum = a.adnum "
 
@@ -2325,16 +2375,16 @@ struct FilteringQueries listSourceSequencesSQL[] = {
 		"       left join pg_depend d2 on d2.refobjid = s.seqoid "
 		"        and d2.refclassid = 'pg_class'::regclass "
 		"        and d2.classid = 'pg_attrdef'::regclass "
-		"       join pg_attrdef a on a.oid = d2.objid "
-		"       join pg_attribute at "
+		"       left join pg_attrdef a on a.oid = d2.objid "
+		"       left join pg_attribute at "
 		"         on at.attrelid = a.adrelid "
 		"        and at.attnum = a.adnum "
 
 		"       left join pg_class r1 on r1.oid = d1.refobjid "
-		"       join pg_namespace rn1 on rn1.oid = r1.relnamespace "
+		"       left join pg_namespace rn1 on rn1.oid = r1.relnamespace "
 
 		"       left join pg_class r2 on r2.oid = at.attrelid  "
-		"       join pg_namespace rn2 on rn2.oid = r2.relnamespace "
+		"       left join pg_namespace rn2 on rn2.oid = r2.relnamespace "
 
 		/* exclude-schema */
 		"      left join pg_temp.filter_exclude_schema fn "
@@ -2642,9 +2692,17 @@ struct FilteringQueries listSourceIndexesSQL[] = {
 		"           on rn.nspname = inc.nspname "
 		"          and r.relname = inc.relname "
 
+		/* exclude-index */
+		"         left join pg_temp.filter_exclude_index fei "
+		"                on n.nspname = fei.nspname "
+		"               and i.relname = fei.relname "
+
 		"    where r.relkind = 'r' and r.relpersistence in ('p', 'u') "
 		"      and n.nspname !~ '^pg_' and n.nspname <> 'information_schema'"
 		"      and n.nspname !~ 'pgcopydb' "
+
+		/* WHERE clause for exclusion filters */
+		"		and fei.nspname is null "
 
 		/* avoid pg_class entries which belong to extensions */
 		"     and not exists "
@@ -2714,6 +2772,11 @@ struct FilteringQueries listSourceIndexesSQL[] = {
 		"                on rn.nspname = ftd.nspname "
 		"               and r.relname = ftd.relname "
 
+		/* exclude-index */
+		"         left join pg_temp.filter_exclude_index fei "
+		"                on n.nspname = fei.nspname "
+		"               and i.relname = fei.relname "
+
 		"    where r.relkind = 'r' and r.relpersistence in ('p', 'u') "
 		"      and n.nspname !~ '^pg_' and n.nspname <> 'information_schema'"
 		"      and n.nspname !~ 'pgcopydb' "
@@ -2722,6 +2785,7 @@ struct FilteringQueries listSourceIndexesSQL[] = {
 		"     and fn.nspname is null "
 		"     and ft.relname is null "
 		"     and ftd.relname is null "
+		"     and fei.relname is null "
 
 		/* avoid pg_class entries which belong to extensions */
 		"     and not exists "
@@ -2782,12 +2846,19 @@ struct FilteringQueries listSourceIndexesSQL[] = {
 		"           on rn.nspname = inc.nspname "
 		"          and r.relname = inc.relname "
 
+		/* exclude-index */
+		"    left join pg_temp.filter_exclude_index fei "
+		"           on n.nspname = fei.nspname "
+		"          and i.relname = fei.relname "
+
 		"    where r.relkind = 'r' and r.relpersistence in ('p', 'u') "
 		"      and n.nspname !~ '^pg_' and n.nspname <> 'information_schema'"
 		"      and n.nspname !~ 'pgcopydb' "
 
 		/* WHERE clause for exclusion filters */
-		"     and inc.relname is null "
+		"     and (  inc.relname is null "
+		"          or "
+		"            fei.relname is not null ) "
 
 		/* avoid pg_class entries which belong to extensions */
 		"     and not exists "
@@ -2852,12 +2923,18 @@ struct FilteringQueries listSourceIndexesSQL[] = {
 		"                on rn.nspname = ft.nspname "
 		"               and r.relname = ft.relname "
 
+		/* exclude-index */
+		"         left join pg_temp.filter_exclude_index fei "
+		"                on n.nspname = fei.nspname "
+		"               and i.relname = fei.relname "
+
 		"    where r.relkind = 'r' and r.relpersistence in ('p', 'u') "
 		"      and n.nspname !~ '^pg_' and n.nspname <> 'information_schema'"
 		"      and n.nspname !~ 'pgcopydb' "
 
 		/* WHERE clause for exclusion filters */
 		"     and (   fn.nspname is not null "
+		"          or fei.relname is not null "
 		"          or ft.relname is not null ) "
 
 		/* avoid pg_class entries which belong to extensions */
