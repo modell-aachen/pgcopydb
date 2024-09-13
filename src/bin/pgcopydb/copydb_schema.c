@@ -971,11 +971,13 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		if (!schema_list_ext_schemas(pgsql, filtersDB))
 		{
 			/* errors have already been logged */
+			log_debug("copydb_schema: 1")
 			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 	}
 
+	log_debug("copydb_schema: 2")
 	if (specs->skipCollations &&
 		!filtersDB->sections[DATA_SECTION_COLLATIONS].fetched)
 	{
@@ -1012,6 +1014,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 				 (long long) count.colls);
 	}
 
+	log_debug("copydb_schema: 3")
 	/*
 	 * Take the complement of the filtering, to list the OIDs of objects that
 	 * we do not process.
@@ -1063,6 +1066,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		return true;
 	}
 
+	log_debug("copydb_schema: 4")
 	/*
 	 * Now fetch the OIDs of tables, indexes, and sequences that we filter out.
 	 */
@@ -1094,7 +1098,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 			return false;
 		}
 	}
-
+	log_debug("copydb_schema: 5")
 	if ((specs->section == DATA_SECTION_ALL ||
 		 specs->section == DATA_SECTION_INDEXES ||
 		 specs->section == DATA_SECTION_CONSTRAINTS) &&
@@ -1138,7 +1142,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 			return false;
 		}
 	}
-
+	log_debug("copydb_schema: 6")
 	if ((specs->section == DATA_SECTION_ALL ||
 		 specs->section == DATA_SECTION_SET_SEQUENCES) &&
 		!filtersDB->sections[DATA_SECTION_SET_SEQUENCES].fetched)
@@ -1167,6 +1171,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 			return false;
 		}
 	}
+	log_debug("copydb_schema: 7")
 
 	if (!filtersDB->sections[DATA_SECTION_DEPENDS].fetched)
 	{
@@ -1194,7 +1199,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 			return false;
 		}
 	}
-
+	log_debug("copydb_schema: 8")
 	/* re-install the actual filter type */
 	filters->type = type;
 
