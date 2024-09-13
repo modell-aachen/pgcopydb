@@ -101,28 +101,28 @@ copydb_prepare_sequence_specs(CopyDataSpec *specs, PGSQL *pgsql, bool reset)
 
 		uint64_t durationMs = INSTR_TIME_GET_MILLISEC(duration);
 
-	if (!summary_increment_timing(sourceDB,
+		if (!summary_increment_timing(sourceDB,
 									  TIMING_SECTION_SET_SEQUENCES,
 									  0, /* count didn't change */
 									  0, /* bytesTransmitted */
 									  durationMs))
 		{
-			(void) catalog_stop_timing(&timing);
-
-			/*
-			* Only register the section has done the first time (reset is false).
-			*/
-			if (!catalog_register_section(sourceDB, &timing))
-			{
-				/* errors have already been logged */
-				return false;
-			}
+			/* errors have already been logged */
+			return false;
 		}
 	}
 	else
 	{
-		/* errors have already been logged */
-		return false;
+		(void) catalog_stop_timing(&timing);
+
+		/*
+		 * Only register the section has done the first time (reset is false).
+		 */
+		if (!catalog_register_section(sourceDB, &timing))
+		{
+			/* errors have already been logged */
+			return false;
+		}
 	}
 
 	return true;
