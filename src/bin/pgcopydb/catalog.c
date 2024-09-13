@@ -4995,7 +4995,7 @@ catalog_iter_s_database(DatabaseCatalog *catalog,
 
 	iter->catalog = catalog;
 
-	if (!catalog_iter_s_database_init(iter))
+	if (!catalog_iter_s_database_init(catalog, iter))
 	{
 		/* errors have already been logged */
 		free(iter);
@@ -5045,7 +5045,7 @@ catalog_iter_s_database(DatabaseCatalog *catalog,
  * SourceDatabase entries.
  */
 bool
-catalog_iter_s_database_init(SourceDatabaseIterator *iter)
+catalog_iter_s_database_init(DatabaseCatalog *catalog, SourceDatabaseIterator *iter)
 {
 	sqlite3 *db = iter->catalog->db;
 

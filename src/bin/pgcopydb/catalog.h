@@ -412,7 +412,7 @@ typedef struct SourceDatabaseIterator
 	SQLiteQuery query;
 } SourceDatabaseIterator;
 
-bool catalog_iter_s_database_init(SourceDatabaseIterator *iter);
+bool catalog_iter_s_database_init(DatabaseCatalog *catalog, SourceDatabaseIterator *iter);
 bool catalog_iter_s_database_next(SourceDatabaseIterator *iter);
 bool catalog_iter_s_database_finish(SourceDatabaseIterator *iter);
 
