@@ -1212,7 +1212,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		(void) semaphore_unlock(&(filtersDB->sema));
 		return false;
 	}
-
+	log_debug("copydb_schema: 9");
 	if ((specs->section == DATA_SECTION_ALL ||
 		 specs->section == DATA_SECTION_FILTERS) &&
 		!filtersDB->sections[DATA_SECTION_FILTERS].fetched)
@@ -1240,7 +1240,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 			return false;
 		}
 	}
-
+	log_debug("copydb_schema: 10");
 	(void) semaphore_unlock(&(filtersDB->sema));
 	return true;
 }
