@@ -1080,6 +1080,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -1089,6 +1090,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 	}
@@ -1108,6 +1110,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -1117,6 +1120,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -1130,6 +1134,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		if (!catalog_register_section(filtersDB, &cTiming))
 		{
 			/* errors have already been logged */
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 	}
@@ -1148,6 +1153,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -1157,6 +1163,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 	}
@@ -1173,6 +1180,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -1182,6 +1190,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			/* errors have already been logged */
 			filters->type = type;
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 	}
@@ -1195,6 +1204,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 	if (!catalog_attach(filtersDB, sourceDB, "source"))
 	{
 		/* errors have already been logged */
+		(void) semaphore_unlock(&(filtersDB->sema));
 		return false;
 	}
 
@@ -1212,6 +1222,7 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		{
 			log_error("Failed to prepare filtering hash-table, "
 					  "see above for details");
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 
@@ -1220,10 +1231,12 @@ copydb_fetch_filtered_oids(CopyDataSpec *specs, PGSQL *pgsql)
 		if (!catalog_register_section(filtersDB, &timing))
 		{
 			/* errors have already been logged */
+			(void) semaphore_unlock(&(filtersDB->sema));
 			return false;
 		}
 	}
 
+	(void) semaphore_unlock(&(filtersDB->sema));
 	return true;
 }
 
