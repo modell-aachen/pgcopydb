@@ -353,10 +353,6 @@ copydb_copy_all_sequences(CopyDataSpec *specs, bool reset)
 		INSTR_TIME_SUBTRACT(duration, startTime);
 
 		uint64_t durationMs = INSTR_TIME_GET_MILLISEC(duration);
-		{
-			/* errors have already been logged */
-			return false;
-		}
 		if (!summary_increment_timing(sourceDB,
 									  TIMING_SECTION_SET_SEQUENCES,
 									  0, /* count didn't change */
