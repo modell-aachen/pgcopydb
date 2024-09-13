@@ -806,6 +806,8 @@ catalog_attach(DatabaseCatalog *a, DatabaseCatalog *b, const char *name)
 
 	sformat(buf, sizeof(buf), sqlTmpl, b->dbfile, name);
 
+	log_debug("Attempting to attach database with command: %s", buf);
+
 	int rc = sqlite3_exec(a->db, buf, NULL, NULL, NULL);
 
 	if (rc != SQLITE_OK)
