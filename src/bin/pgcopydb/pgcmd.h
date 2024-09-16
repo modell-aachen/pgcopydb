@@ -241,4 +241,6 @@ bool parse_archive_acl_or_comment(char *ptr, ArchiveContentItem *item);
 bool parse_archive_list_entry(ArchiveContentItem *item, const char *line);
 bool tokenize_archive_list_entry(ArchiveToken *token);
 
+bool FreeArchiveContentArray(ArchiveContentArray *contents);
+
 #endif /* PGCMD_H */

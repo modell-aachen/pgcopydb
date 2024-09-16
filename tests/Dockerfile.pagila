@@ -15,10 +15,9 @@ RUN apt-get update \
     lsof \
     psmisc \
     htop \
-    strace \
-    gdb \
-    sqlite3 \
-    libgc1 \
+	strace \
+	gdb \
+	sqlite3 \
     libpq5 \
     postgresql-client-common \
     curl \

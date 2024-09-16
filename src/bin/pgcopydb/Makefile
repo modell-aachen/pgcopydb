@@ -97,7 +97,7 @@ LIBS += $(shell $(PG_CONFIG) --ldflags)
 LIBS += $(shell $(PG_CONFIG) --libs)
 LIBS += -lpq
 LIBS += -lncurses
-LIBS += -lgc
+LIBS += -lsqlite3
 
 # Needed for ARM64 based OSX
 ifeq ($(shell uname -s),Darwin)

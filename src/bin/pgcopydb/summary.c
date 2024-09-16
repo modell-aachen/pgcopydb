@@ -2204,7 +2204,7 @@ summary_iter_timing(DatabaseCatalog *catalog,
 	if (!summary_iter_timing_init(iter))
 	{
 		/* errors have already been logged */
-		(void) semaphore_unlock(&(catalog->sema));
+		free(iter);
 		return false;
 	}
 
@@ -2213,7 +2213,7 @@ summary_iter_timing(DatabaseCatalog *catalog,
 		if (!summary_iter_timing_next(iter))
 		{
 			/* errors have already been logged */
-			(void) semaphore_unlock(&(catalog->sema));
+			free(iter);
 			return false;
 		}
 
@@ -2224,7 +2224,7 @@ summary_iter_timing(DatabaseCatalog *catalog,
 			if (!summary_iter_timing_finish(iter))
 			{
 				/* errors have already been logged */
-				(void) semaphore_unlock(&(catalog->sema));
+				free(iter);
 				return false;
 			}
 
@@ -2241,7 +2241,7 @@ summary_iter_timing(DatabaseCatalog *catalog,
 		}
 	}
 
-	(void) semaphore_unlock(&(catalog->sema));
+	free(iter);
 
 	return true;
 }
@@ -2303,6 +2303,8 @@ summary_iter_timing_next(TimingIterator *iter)
 
 	if (rc == SQLITE_DONE)
 	{
+		free(iter->timing->label);
+		free(iter->timing);
 		iter->timing = NULL;
 
 		return true;
@@ -2380,6 +2382,8 @@ summary_iter_timing_finish(TimingIterator *iter)
 	/* in case we finish before reaching the DONE step */
 	if (iter->timing != NULL)
 	{
+		free(iter->timing->label);
+		free(iter->timing);
 		iter->timing = NULL;
 	}
 
@@ -2899,6 +2903,7 @@ print_summary_as_json(Summary *summary, const char *filename)
 	}
 
 	json_free_serialized_string(serialized_string);
+	json_value_free(js);
 }
 
 

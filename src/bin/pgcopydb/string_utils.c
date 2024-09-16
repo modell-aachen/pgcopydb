@@ -589,9 +589,10 @@ countLines(char *buffer)
  * area.
  */
 bool
-splitLines(LinesBuffer *lbuf, char *buffer)
+splitLines(LinesBuffer *lbuf, char *buffer, bool ownsBuffer)
 {
 	lbuf->buffer = buffer;
+	lbuf->ownsBuffer = ownsBuffer;
 	lbuf->count = countLines(lbuf->buffer);
 
 	if (lbuf->buffer == NULL || lbuf->count == 0)
@@ -642,6 +643,21 @@ splitLines(LinesBuffer *lbuf, char *buffer)
 
 
 /*
+ * FreeLinesBuffer frees the allocated memory for LinesBuffer instance.
+ */
+void
+FreeLinesBuffer(LinesBuffer *lbuf)
+{
+	free(lbuf->lines);
+
+	if (lbuf->ownsBuffer)
+	{
+		free(lbuf->buffer);
+	}
+}
+
+
+/*
  * processBufferCallback is a function callback to use with the subcommands.c
  * library when we want to output a command's output as it's running, such as
  * when running a pg_basebackup command.
@@ -652,7 +668,7 @@ processBufferCallback(const char *buffer, bool error)
 	const char *warningPattern = "^(pg_dump: warning:|pg_restore: warning:)";
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, (char *) buffer))
+	if (!splitLines(&lbuf, (char *) buffer, true))
 	{
 		/* errors have already been logged */
 		return;
@@ -669,6 +685,8 @@ processBufferCallback(const char *buffer, bool error)
 			log_level(logLevel, "%s", line);
 		}
 	}
+
+	FreeLinesBuffer(&lbuf);
 }
 
 

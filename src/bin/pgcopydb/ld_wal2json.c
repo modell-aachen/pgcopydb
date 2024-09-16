@@ -101,6 +101,7 @@ parseWal2jsonMessageActionAndXid(LogicalStreamContext *context)
 		metadata->xid = (uint32_t) xid;
 	}
 
+	json_value_free(json);
 
 	return true;
 }

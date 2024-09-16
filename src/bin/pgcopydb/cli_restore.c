@@ -588,6 +588,8 @@ cli_restore_schema_parse_list(int argc, char **argv)
 					item->restoreListName ? item->restoreListName : "");
 		}
 
+		FreeArchiveContentArray(&contents);
+
 		exit(EXIT_CODE_QUIT);
 	}
 

@@ -420,6 +420,9 @@ pgsql_finish(PGSQL *pgsql)
 		pgsql->pgversion[0] = '\0';
 		pgsql->pgversion_num = 0;
 
+		/* we don't need the print-safe URL anymore */
+		freeSafeURI(&(pgsql->safeURI));
+
 		/*
 		 * When we fail to connect, on the way out we call pgsql_finish to
 		 * reset the connection to NULL. We still want the callers to be able
@@ -447,7 +450,7 @@ log_connection_error(PGconn *connection, int logLevel)
 	char *message = PQerrorMessage(connection);
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, message))
+	if (!splitLines(&lbuf, message, false))
 	{
 		/* errors have already been logged */
 		return;
@@ -466,6 +469,8 @@ log_connection_error(PGconn *connection, int logLevel)
 			log_level(logLevel, "%s", line);
 		}
 	}
+
+	FreeLinesBuffer(&lbuf);
 }
 
 
@@ -856,7 +861,7 @@ pgAutoCtlDefaultNoticeProcessor(void *arg, const char *message)
 {
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, (char *) message))
+	if (!splitLines(&lbuf, (char *) message, false))
 	{
 		/* errors have already been logged */
 		return;
@@ -866,6 +871,8 @@ pgAutoCtlDefaultNoticeProcessor(void *arg, const char *message)
 	{
 		log_warn("%s", lbuf.lines[lineNumber]);
 	}
+
+	FreeLinesBuffer(&lbuf);
 }
 
 
@@ -878,7 +885,7 @@ pgAutoCtlDebugNoticeProcessor(void *arg, const char *message)
 {
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, (char *) message))
+	if (!splitLines(&lbuf, (char *) message, false))
 	{
 		/* errors have already been logged */
 		return;
@@ -888,6 +895,8 @@ pgAutoCtlDebugNoticeProcessor(void *arg, const char *message)
 	{
 		log_sql("%s", lbuf.lines[lineNumber]);
 	}
+
+	FreeLinesBuffer(&lbuf);
 }
 
 
@@ -1734,7 +1743,7 @@ pgsql_send_with_params(PGSQL *pgsql, const char *sql, int paramCount,
 
 		LinesBuffer lbuf = { 0 };
 
-		if (!splitLines(&lbuf, message))
+		if (!splitLines(&lbuf, message, false))
 		{
 			/* errors have already been logged */
 			return false;
@@ -1759,6 +1768,7 @@ pgsql_send_with_params(PGSQL *pgsql, const char *sql, int paramCount,
 		}
 
 		destroyPQExpBuffer(debugParameters);
+		FreeLinesBuffer(&lbuf);
 		clear_results(pgsql);
 
 		return false;
@@ -2341,7 +2351,7 @@ pgsql_execute_log_error(PGSQL *pgsql,
 
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, message))
+	if (!splitLines(&lbuf, message, false))
 	{
 		/* errors have already been logged */
 		return;
@@ -2354,6 +2364,8 @@ pgsql_execute_log_error(PGSQL *pgsql,
 				  PQbackendPID(pgsql->connection),
 				  lbuf.lines[lineNumber]);
 	}
+
+	FreeLinesBuffer(&lbuf);
 
 	if (pgsql->logSQL)
 	{
@@ -2547,7 +2559,7 @@ clear_results(PGSQL *pgsql)
 			LinesBuffer lbuf = { 0 };
 			char *pqmessage = PQerrorMessage(connection);
 
-			if (!splitLines(&lbuf, pqmessage))
+			if (!splitLines(&lbuf, pqmessage, false))
 			{
 				/* errors have already been logged */
 				return false;
@@ -2560,6 +2572,7 @@ clear_results(PGSQL *pgsql)
 
 			PQclear(result);
 			pgsql_finish(pgsql);
+			FreeLinesBuffer(&lbuf);
 			return false;
 		}
 
@@ -3154,7 +3167,7 @@ pgcopy_log_error(PGSQL *pgsql, PGresult *res, const char *context)
 	LinesBuffer lbuf = { 0 };
 	char *message = PQerrorMessage(pgsql->connection);
 
-	if (!splitLines(&lbuf, message))
+	if (!splitLines(&lbuf, message, false))
 	{
 		/* errors have already been logged */
 		return;
@@ -3196,6 +3209,8 @@ pgcopy_log_error(PGSQL *pgsql, PGresult *res, const char *context)
 			  endpoint,
 			  PQbackendPID(pgsql->connection),
 			  context);
+
+	FreeLinesBuffer(&lbuf);
 
 	if (res != NULL)
 	{
@@ -3563,7 +3578,7 @@ parseTimeLineHistory(const char *filename, const char *content,
 {
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, (char *) content))
+	if (!splitLines(&lbuf, (char *) content, false))
 	{
 		/* errors have already been logged */
 		return false;
@@ -3616,6 +3631,7 @@ parseTimeLineHistory(const char *filename, const char *content,
 		{
 			log_error("Failed to parse history file line %lld: \"%s\"",
 					  (long long) lineNumber, ptr);
+			FreeLinesBuffer(&lbuf);
 			return false;
 		}
 
@@ -3624,6 +3640,7 @@ parseTimeLineHistory(const char *filename, const char *content,
 		if (!stringToUInt(lbuf.lines[lineNumber], &(entry->tli)))
 		{
 			log_error("Failed to parse history timeline \"%s\"", tabptr);
+			FreeLinesBuffer(&lbuf);
 			return false;
 		}
 
@@ -3642,6 +3659,7 @@ parseTimeLineHistory(const char *filename, const char *content,
 		{
 			log_error("Failed to parse history timeline %d LSN \"%s\"",
 					  entry->tli, lsn);
+			FreeLinesBuffer(&lbuf);
 			return false;
 		}
 
@@ -3656,6 +3674,8 @@ parseTimeLineHistory(const char *filename, const char *content,
 
 		entry = &(system->timelines.history[++system->timelines.count]);
 	}
+
+	FreeLinesBuffer(&lbuf);
 
 	/*
 	 * Create one more entry for the "tip" of the timeline, which has no entry
@@ -3883,6 +3903,8 @@ pg_copy_large_object(PGSQL *src,
 
 			return false;
 		}
+
+		(void) free(buffer);
 
 		*bytesTransmitted += bytesRead;
 	} while (bytesRead > 0);
@@ -4749,7 +4771,7 @@ pgsql_stream_log_error(PGSQL *pgsql, PGresult *res, const char *message)
 	{
 		LinesBuffer lbuf = { 0 };
 
-		if (!splitLines(&lbuf, pqmessage))
+		if (!splitLines(&lbuf, pqmessage, false))
 		{
 			/* errors have already been logged */
 			return;
@@ -4772,6 +4794,8 @@ pgsql_stream_log_error(PGSQL *pgsql, PGresult *res, const char *message)
 				log_error("%s", lbuf.lines[lineNumber]);
 			}
 		}
+
+		FreeLinesBuffer(&lbuf);
 	}
 
 	if (res != NULL)
@@ -5203,6 +5227,7 @@ pgsql_replication_origin_progress(PGSQL *pgsql,
 					  context.strVal,
 					  nodeName,
 					  flush ? "true" : "false");
+			free(context.strVal);
 
 			return false;
 		}
@@ -5291,6 +5316,7 @@ pgsql_replication_slot_exists(PGSQL *pgsql, const char *slotName,
 						  "confirmed_flush_lsn for slot \"%s\"",
 						  context.strVal,
 						  slotName);
+				free(context.strVal);
 
 				return false;
 			}
@@ -5589,9 +5615,12 @@ pgsql_current_wal_flush_lsn(PGSQL *pgsql, uint64_t *lsn)
 			log_error("Failed to parse LSN \"%s\" returned from "
 					  "pg_current_wal_flush_lsn()",
 					  context.strVal);
+			free(context.strVal);
 
 			return false;
 		}
+
+		free(context.strVal);
 	}
 
 	return true;
@@ -5641,9 +5670,12 @@ pgsql_current_wal_insert_lsn(PGSQL *pgsql, uint64_t *lsn)
 			log_error("Failed to parse LSN \"%s\" returned from "
 					  "pg_current_wal_insert_lsn()",
 					  context.strVal);
+			free(context.strVal);
 
 			return false;
 		}
+
+		free(context.strVal);
 	}
 
 	return true;

@@ -392,6 +392,7 @@ cli_compare_data(int argc, char **argv)
 		fformat(stdout, "%s\n", serialized_string);
 
 		json_free_serialized_string(serialized_string);
+		json_value_free(js);
 	}
 	else
 	{

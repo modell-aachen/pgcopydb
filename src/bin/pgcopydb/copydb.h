@@ -307,6 +307,8 @@ bool copydb_init_table_specs(CopyTableDataSpec *tableSpecs,
 							 SourceTable *source,
 							 int partNumber);
 
+void FreeCopyTableDataSpec(CopyTableDataSpec *tableSpecs);
+
 bool copydb_export_snapshot(TransactionSnapshot *snapshot);
 
 bool copydb_fatal_exit(void);

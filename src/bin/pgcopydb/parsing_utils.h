@@ -112,4 +112,8 @@ bool parse_and_scrub_connection_string(const char *pguri, SafeURI *safeURI);
 
 bool bareConnectionString(const char *pguri, SafeURI *safeURI);
 
+void freeSafeURI(SafeURI *safeURI);
+void freeURIParams(URIParams *params);
+void freeKeyVal(KeyVal *parameters);
+
 #endif /* PARSING_UTILS_H */

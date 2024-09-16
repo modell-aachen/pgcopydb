@@ -144,6 +144,7 @@ cli_pprint_json(JSON_Value *js)
 
 	/* free intermediate memory */
 	json_free_serialized_string(serialized_string);
+	json_value_free(js);
 }
 
 
@@ -747,7 +748,7 @@ cli_read_one_line(const char *filename,
 	/* make sure to use only the first line of the file, without \n */
 	LinesBuffer lbuf = { 0 };
 
-	if (!splitLines(&lbuf, contents))
+	if (!splitLines(&lbuf, contents, true))
 	{
 		/* errors have already been logged */
 		return false;
@@ -756,6 +757,7 @@ cli_read_one_line(const char *filename,
 	if (lbuf.count != 1)
 	{
 		log_error("Failed to parse %s file \"%s\"", name, filename);
+		FreeLinesBuffer(&lbuf);
 		return false;
 	}
 
@@ -767,11 +769,14 @@ cli_read_one_line(const char *filename,
 				  lbuf.lines[0],
 				  (long long) strlen(lbuf.lines[0]) + 1,
 				  (long long) size);
+		FreeLinesBuffer(&lbuf);
 		return false;
 	}
 
 	/* publish the one line to the snapshot variable */
 	strlcpy(target, lbuf.lines[0], size);
+
+	FreeLinesBuffer(&lbuf);
 
 	return true;
 }
